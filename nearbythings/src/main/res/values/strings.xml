@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Nearbythings</string>
+    <string name="discover">Discover</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="status">Current status: %s </string>
+    <string name="connected_to">Connected to: %s</string>
+    <string name="message">Message Payload Sent: %s</string>
+
+</resources>

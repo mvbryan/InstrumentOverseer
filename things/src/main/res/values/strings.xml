@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">AndroidThings_Nearby</string>
+    <string name="advertise">Advertise</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="status">Current status: %s </string>
+    <string name="connected_to">Connected to: %s</string>
+    <string name="message">Message Payload Received: %s</string>
+</resources>
