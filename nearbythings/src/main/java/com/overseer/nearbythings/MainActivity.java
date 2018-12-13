@@ -31,6 +31,19 @@ import com.google.android.things.pio.PeripheralManager;
 import org.w3c.dom.Text;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAKeyGenParameterSpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.sql.Timestamp;
 
 /*
  * Copyright (C) 2018 Francesco Azzola
@@ -76,10 +89,17 @@ public class MainActivity extends Activity {
     private int SPEAKER_READY_DELAY_MS = 300;
     private Speaker mSpeaker;
     private Gpio mLed;
+    private Gpio mGreenLed;
+
+    private String payloadTemperature = "";
+    private String payloadPressure = "";
+    private String payload = "";
 
 
     private float mLastTemperature;
     private float mLastPressure;
+
+
 
     // Callback used when we register the BMP280 sensor driver with the system's SensorManager.
     private SensorManager.DynamicSensorCallback mDynamicSensorCallback
@@ -112,6 +132,13 @@ public class MainActivity extends Activity {
             if (mDisplayMode == DisplayMode.TEMPERATURE) {
                 updateDisplay(mLastTemperature);
             }
+            Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+            String payload = "{Time: " + timestamp + " Temp: " + mLastTemperature + "}\n";
+
+            payloadTemperature = payloadTemperature + payload;
+            //Log.d(TAG, "PAYLOAD MSG: " + payloadTemperature);
+
+
         }
 
         @Override
@@ -158,6 +185,15 @@ public class MainActivity extends Activity {
                     Button.LogicState.PRESSED_WHEN_LOW, KeyEvent.KEYCODE_A);
             mButtonInputDriver.register();
             Log.d(TAG, "Initialized GPIO Button that generates a keypress with KEYCODE_A");
+        } catch (IOException e) {
+            throw new RuntimeException("Error initializing GPIO button", e);
+        }
+
+        try {
+            mButtonInputDriver = new ButtonInputDriver("BCM20",
+                    Button.LogicState.PRESSED_WHEN_LOW, KeyEvent.KEYCODE_B);
+            mButtonInputDriver.register();
+            Log.d(TAG, "Initialized GPIO Button that generates a keypress with KEYCODE_B");
         } catch (IOException e) {
             throw new RuntimeException("Error initializing GPIO button", e);
         }
@@ -213,6 +249,17 @@ public class MainActivity extends Activity {
             throw new RuntimeException("Error initializing led", e);
         }
 
+        // GPIO led
+        try {
+            PeripheralManager pioManager = PeripheralManager.getInstance();
+            mGreenLed = pioManager.openGpio("BCM19");
+            mGreenLed.setEdgeTriggerType(Gpio.EDGE_NONE);
+            mGreenLed.setDirection(Gpio.DIRECTION_OUT_INITIALLY_LOW);
+            mGreenLed.setActiveType(Gpio.ACTIVE_HIGH);
+        } catch (IOException e) {
+            throw new RuntimeException("Error initializing led", e);
+        }
+
         // PWM speaker
         try {
             mSpeaker = new Speaker("PWM1");
@@ -253,6 +300,8 @@ public class MainActivity extends Activity {
         }
 
 
+
+
     }
 
     @Override
@@ -262,6 +311,19 @@ public class MainActivity extends Activity {
             updateDisplay(mLastPressure);
             try {
                 mLed.setValue(true);
+            } catch (IOException e) {
+                Log.e(TAG, "error updating LED", e);
+            }
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_B) {
+            //mDisplayMode = DisplayMode.PRESSURE;
+            //updateDisplay(mLastPressure);
+            Log.d(TAG, "The B key was pressed!!!");
+            //payload = payloadTemperature.concat(payloadPressure);
+            //Log.d(TAG, "PAYLOAD: " + payload);
+            try {
+                mGreenLed.setValue(true);
             } catch (IOException e) {
                 Log.e(TAG, "error updating LED", e);
             }
@@ -277,6 +339,42 @@ public class MainActivity extends Activity {
             updateDisplay(mLastTemperature);
             try {
                 mLed.setValue(false);
+            } catch (IOException e) {
+                Log.e(TAG, "error updating LED", e);
+            }
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_B) {
+            //mDisplayMode = DisplayMode.TEMPERATURE;
+            //updateDisplay(mLastTemperature);
+            Log.d(TAG, "The B key was let go!!!!");
+            Log.d(TAG, "The lengthing of the payload in bytes: "+payloadTemperature.getBytes().length);
+            Log.d(TAG, "The payload: " + payloadTemperature);
+            if(payloadTemperature.getBytes().length < 30000){
+                if (dsvManager != null){
+                    if (!dsvManager.getCurrentEndpoint().isEmpty()){
+                        dsvManager.sendData(payloadTemperature);
+                        payloadTemperature = "";
+                    } else {
+                        Log.d(TAG, "DsvManager endpoint was empty.  Not connected to an endpoint yet.");
+                    }
+                } else {
+                    Log.d(TAG, "DsvManager is null! DsvManager was not created!");
+                }
+            } else {
+                Log.d(TAG, "Payload length was over 30k bytes: " + payloadTemperature.getBytes().length);
+                Log.d(TAG, "Payload being erased! Press the button sooner!!");
+                payloadTemperature = "";
+            }
+//
+//            if(dsvManager != null){
+//                Log.d(TAG, "Current endpoint is: " + dsvManager.getCurrentEndpoint());
+//            } else {
+//                Log.d(TAG, "dsvManager was NULL!!!!");
+//            }
+
+            try {
+                mGreenLed.setValue(false);
             } catch (IOException e) {
                 Log.e(TAG, "error updating LED", e);
             }
@@ -395,6 +493,14 @@ public class MainActivity extends Activity {
         public void onConnected() {
           //  Toast.makeText(MainActivity.this, "Connected", Toast.LENGTH_LONG).show();
             Log.d(TAG,"Connected");
+//            dsvManager.sendData(payload);
+//            payload =
+            //Thread t = new Thread(new MyRunnable(payload));
+//            if(!t.isAlive()) {
+//                t.start();
+//            } else {
+//                Log.d(TAG, "Thread is still sleeping! Wait for more data!");
+//            }
 
         }
     };
@@ -430,5 +536,27 @@ public class MainActivity extends Activity {
         connected.setText(getString(R.string.connected_to,m));
         TextView status = findViewById(R.id.textView_status);
         status.setText(getString(R.string.status,m));
+    }
+}
+
+class MyRunnable implements Runnable {
+    private NearbyDsvManager dsvManager;
+    private String payload;
+
+    public MyRunnable(NearbyDsvManager dsvManager, String payload){
+        this.dsvManager = dsvManager;
+        this.payload = payload;
+    }
+
+    public void run() {
+        Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+        String data = "{Timestamp: "+ timestamp + " payload: " + payload + "}\n";
+        dsvManager.sendData(data);
+        try {
+            Thread.sleep(20000);
+        } catch (InterruptedException e ) {
+            Thread.currentThread().interrupt();
+            return;
+        }
     }
 }

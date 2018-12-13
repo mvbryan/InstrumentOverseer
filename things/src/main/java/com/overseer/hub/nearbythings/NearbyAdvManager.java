@@ -18,6 +18,8 @@ import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.things.iotcore.IotCoreClient;
+import com.google.android.things.iotcore.TelemetryEvent;
 
 /*
  * Copyright (C) 2018 Francesco Azzola
@@ -45,14 +47,16 @@ public class NearbyAdvManager {
     private Context ctx;
     private ConnectionsClient client;
     private EventListener listener;
+    private IotCoreClient coreClient;
 
     private String currentEndpoint;
 
 
-    public NearbyAdvManager(Context ctx, EventListener listener) {
+    public NearbyAdvManager(Context ctx, EventListener listener, IotCoreClient coreClient) {
         Log.d(TAG, "Constructor..");
         this.ctx = ctx;
         this.listener = listener;
+        this.coreClient = coreClient;
         client = Nearby.getConnectionsClient(ctx);
         client.startAdvertising("AndroidThings",
                 SERVICE_ID,
@@ -116,6 +120,7 @@ public class NearbyAdvManager {
             Log.i(TAG, "Content ["+content+"]");
             listener.onMessage(content);
             setMessage(content);
+            sendPayload(content);
         }
 
         @Override
@@ -149,6 +154,17 @@ public class NearbyAdvManager {
     private void setMessage(String currentMessage) {
         TextView message = ((Activity)ctx).findViewById(R.id.textView_message);
         message.setText(ctx.getString(R.string.message, currentMessage));
+    }
+
+    /**Send payload to cloud */
+    private void sendPayload(String currentMessage) {
+        Log.d(TAG, "Inside send payload");
+        Log.d(TAG, "Is the string empty: " + currentMessage.isEmpty());
+        coreClient.connect();
+        Log.d(TAG, "Is the client connected: " + coreClient.isConnected());
+        TelemetryEvent telemetryEvent = new TelemetryEvent(currentMessage.getBytes(),null,TelemetryEvent.QOS_AT_LEAST_ONCE);
+        coreClient.publishTelemetry(telemetryEvent);
+        coreClient.publishDeviceState("Device is sending messages to the cloud!".getBytes());
     }
 
     public void disconnect(){

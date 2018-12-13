@@ -28,5 +28,10 @@ dependencies {
 
     implementation 'com.google.android.gms:play-services-nearby:16.0.0'
     implementation 'com.leinardi.android.things:driver-hd44780:1.0'
+    implementation ('com.google.android.things:cloud-iot-core:1.0.0') {
+        exclude group: 'com.android.support'
+        exclude module: 'appcompat-v7'
+        exclude module: 'support-v4'
+    }
 
 }

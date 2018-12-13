@@ -7,6 +7,20 @@ import android.view.View;
 import android.widget.TextView;
 
 import com.google.android.gms.nearby.connection.ConnectionsClient;
+import com.google.android.things.iotcore.ConnectionParams;
+import com.google.android.things.iotcore.IotCoreClient;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 
 /*
  * Copyright (C) 2018 Francesco Azzola
@@ -30,6 +44,10 @@ public class MainActivity extends Activity {
     private ConnectionsClient client;
     private NearbyAdvManager nearbyAdvManager;
 
+    private PrivateKey privateKey;
+    private PublicKey publicKey;
+    private IotCoreClient coreClient;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -47,11 +65,42 @@ public class MainActivity extends Activity {
 //          }
 //      });
 
+        String fileName = "/sdcard/keys/rsa_private_pkcs8";
+        String pubFileName = "/sdcard/keys/public_key.der";
+        try {
+            byte[] keyBytes = Files.readAllBytes(Paths.get(fileName));
+            PKCS8EncodedKeySpec priSpec = new PKCS8EncodedKeySpec(keyBytes);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            privateKey = keyFactory.generatePrivate(priSpec);
+            byte[] pubKeyBytes = Files.readAllBytes(Paths.get(pubFileName));
+            X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubKeyBytes);
+            publicKey = keyFactory.generatePublic(pubSpec);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        } catch (InvalidKeySpecException e) {
+            e.printStackTrace();
+        }
+
+        KeyPair keys = new KeyPair(publicKey, privateKey);
+        ConnectionParams connectionParams = new ConnectionParams.Builder()
+                .setProjectId("wsn-musicmonitor")
+                .setRegistry("instrumentoverseer", "us-central1")
+                .setDeviceId("instrumenthub")
+                .build();
+
+        coreClient = new IotCoreClient.Builder()
+                .setConnectionParams(connectionParams)
+                .setKeyPair(keys)
+                .build();
+
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        coreClient.disconnect();
     }
 
     private NearbyAdvManager.EventListener listener = new NearbyAdvManager.EventListener() {
@@ -63,7 +112,7 @@ public class MainActivity extends Activity {
 
         /** Finds an hub using Nearby Connections. */
     public void startNearbyAdvManager(View view) {
-        nearbyAdvManager = new NearbyAdvManager(this,listener);
+        nearbyAdvManager = new NearbyAdvManager(this,listener, coreClient);
         findViewById(R.id.button_advertise).setEnabled(false);
         findViewById(R.id.button_disconnect).setEnabled(true);
 
